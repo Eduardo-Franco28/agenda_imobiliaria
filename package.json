@@ -1,0 +1,7 @@
+{
+  "name": "agenda-imobiliaria",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agenda de manutenções imobiliárias — site estático + funções serverless na Vercel + Postgres no Supabase."
+}

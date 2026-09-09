@@ -17,6 +17,23 @@
 </head>
 <body class="bg-slate-50 text-slate-800 h-screen flex flex-col overflow-hidden">
 
+    <!-- Overlay exibido enquanto os dados são carregados do banco -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[60] flex flex-col items-center justify-center gap-3">
+        <i class="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-600"></i>
+        <span class="text-sm font-medium text-slate-600">Carregando agenda do banco de dados...</span>
+    </div>
+
+    <!-- Barra de erro de conexão com o banco -->
+    <div id="errorBanner" class="hidden bg-rose-600 text-white text-sm px-6 py-2.5 flex items-center justify-between shrink-0">
+        <span class="flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="errorBannerText">Falha ao conectar ao banco de dados.</span>
+        </span>
+        <button onclick="carregarDados()" class="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg font-semibold transition-all flex items-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i><span>Tentar novamente</span>
+        </button>
+    </div>
+
     <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0 shadow-sm">
         <div class="flex items-center space-x-4">
             <div class="bg-indigo-600 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
@@ -29,6 +46,11 @@
         </div>
 
         <div class="flex items-center space-x-3">
+            <span id="syncStatus" class="hidden sm:flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                <i id="syncIcon" class="fa-solid fa-cloud-arrow-up"></i>
+                <span id="syncText">Sincronizado</span>
+            </span>
+
             <div class="relative hidden sm:block">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
                 <input type="text" id="searchInput" oninput="renderApp()" placeholder="Pesquisar contrato, prestador..." class="pl-9 pr-4 py-2 bg-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 border border-transparent focus:bg-white transition-all">
@@ -297,7 +319,7 @@
 
                 <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
                     <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-all">Cancelar</button>
-                    <button type="submit" class="px-5 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow transition-all">Salvar Agendamento</button>
+                    <button type="submit" id="btnSaveEvent" class="px-5 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow transition-all disabled:opacity-60 disabled:cursor-not-allowed">Salvar Agendamento</button>
                 </div>
             </form>
         </div>
@@ -341,68 +363,115 @@
         let currentDate = new Date();
         let currentView = 'calendar';
         let maintenances = [];
-        const STORAGE_KEY = 'dlange_maintenances_data_v3';
+
+        // Os dados vivem no Postgres (Supabase) e são acessados pelas funções
+        // serverless em /api/manutencoes. A chave do banco fica apenas no servidor.
+        const API = '/api/manutencoes';
+        const LEGACY_STORAGE_KEY = 'dlange_maintenances_data_v3';
 
         window.onload = function() {
-            loadInitialData();
-            renderApp();
+            renderHeaderDate();
+            carregarDados();
         };
 
-        function loadInitialData() {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                try {
-                    maintenances = JSON.parse(saved);
-                } catch(e) {
-                    maintenances = getDefaultData();
+        // ------------------------- Camada de dados -------------------------
+
+        async function requisicao(url, options = {}) {
+            const resp = await fetch(url, {
+                headers: { 'Content-Type': 'application/json' },
+                ...options
+            });
+            if (resp.status === 204) return null;
+            const texto = await resp.text();
+            let dados = null;
+            try { dados = texto ? JSON.parse(texto) : null; } catch (e) { /* resposta sem JSON */ }
+            if (!resp.ok) {
+                throw new Error((dados && dados.erro) || 'Erro ' + resp.status + ' ao falar com o servidor.');
+            }
+            return dados;
+        }
+
+        window.carregarDados = async function() {
+            mostrarErro(null);
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            try {
+                maintenances = await requisicao(API);
+                renderApp();
+                await importarDadosAntigos();
+            } catch (erro) {
+                // Mesmo sem banco, desenha a agenda vazia para a tela não ficar quebrada.
+                maintenances = [];
+                renderApp();
+                mostrarErro(erro.message);
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }
+        };
+
+        // Traz para o banco, uma única vez, os agendamentos que ficaram no
+        // localStorage da versão anterior da agenda.
+        async function importarDadosAntigos() {
+            if (maintenances.length > 0) return;
+            const salvo = localStorage.getItem(LEGACY_STORAGE_KEY);
+            if (!salvo) return;
+
+            let antigos = [];
+            try { antigos = JSON.parse(salvo) || []; } catch (e) { return; }
+            if (!Array.isArray(antigos) || antigos.length === 0) return;
+
+            const msg = 'Encontramos ' + antigos.length + ' agendamento(s) salvos apenas neste navegador.\n\n'
+                + 'Deseja enviá-los para o banco de dados agora?';
+            if (!window.confirm(msg)) return;
+
+            sincronizando('Importando...');
+            try {
+                for (const ev of antigos) {
+                    const { id, ...dados } = ev;
+                    if (!dados.scheduleDate) continue;
+                    const criado = await requisicao(API, { method: 'POST', body: JSON.stringify(dados) });
+                    maintenances.push(criado);
                 }
-            } else {
-                maintenances = getDefaultData();
-                saveToLocalStorage();
+                localStorage.removeItem(LEGACY_STORAGE_KEY);
+                renderApp();
+                sincronizado();
+                showToast(antigos.length + ' agendamento(s) importados para o banco!');
+            } catch (erro) {
+                sincronizado();
+                mostrarErro('Falha ao importar os dados antigos: ' + erro.message);
             }
         }
 
-        function saveToLocalStorage() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(maintenances));
+        // ------------------------- Estado da conexão -------------------------
+
+        function sincronizando(texto) {
+            const status = document.getElementById('syncStatus');
+            status.classList.remove('text-slate-400', 'text-rose-600');
+            status.classList.add('text-indigo-600');
+            document.getElementById('syncIcon').className = 'fa-solid fa-circle-notch fa-spin';
+            document.getElementById('syncText').innerText = texto || 'Salvando...';
         }
 
-        function getDefaultData() {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-            return [
-                {
-                    id: '1',
-                    contractCode: 'CTR-2041',
-                    propertyAddress: 'Av. Paulista, 1000 - Apto 12B',
-                    tenantName: 'Lucas Silveira',
-                    tenantContact: '(11) 97788-1122',
-                    providerName: 'Electro Service Ltda',
-                    providerContact: '(11) 94433-2211',
-                    scheduleDate: todayStr,
-                    scheduleTime: '14:30',
-                    status: 'Pendente',
-                    managerName: 'Gestora Contratos 1',
-                    criticality: 'Emergencial',
-                    serviceType: 'Reparo no Quadro Elétrico',
-                    serviceNotes: 'Disjuntor desarmando com faíscas.'
-                },
-                {
-                    id: '2',
-                    contractCode: 'CTR-1852',
-                    propertyAddress: 'Rua Augusta, 550 - Sala 31',
-                    tenantName: 'Mariana Costa',
-                    tenantContact: '(11) 99887-6655',
-                    providerName: 'HidroClean Caça Vazamentos',
-                    providerContact: '(11) 95544-3322',
-                    scheduleDate: tomorrowStr,
-                    scheduleTime: '10:00',
-                    status: 'Realizado',
-                    managerName: 'Gestora Contratos 2',
-                    criticality: 'Urgente',
-                    serviceType: 'Infiltração no Banheiro',
-                    serviceNotes: 'Serviço concluído e testado.'
-                }
-            ];
+        function sincronizado() {
+            const status = document.getElementById('syncStatus');
+            status.classList.remove('text-indigo-600', 'text-rose-600');
+            status.classList.add('text-slate-400');
+            document.getElementById('syncIcon').className = 'fa-solid fa-cloud-arrow-up';
+            document.getElementById('syncText').innerText = 'Sincronizado';
+        }
+
+        function mostrarErro(mensagem) {
+            const banner = document.getElementById('errorBanner');
+            if (!mensagem) {
+                banner.classList.add('hidden');
+                return;
+            }
+            document.getElementById('errorBannerText').innerText = mensagem;
+            banner.classList.remove('hidden');
+            const status = document.getElementById('syncStatus');
+            status.classList.remove('text-slate-400', 'text-indigo-600');
+            status.classList.add('text-rose-600');
+            document.getElementById('syncIcon').className = 'fa-solid fa-cloud-arrow-down';
+            document.getElementById('syncText').innerText = 'Sem conexão';
         }
 
         window.renderApp = function() {
@@ -776,10 +845,10 @@
             document.getElementById('detailsModal').classList.add('hidden');
         };
 
-        window.saveMaintenance = function(e) {
+        window.saveMaintenance = async function(e) {
             e.preventDefault();
             const id = document.getElementById('eventId').value;
-            
+
             const newEvData = {
                 contractCode: document.getElementById('contractCode').value,
                 propertyAddress: document.getElementById('propertyAddress').value,
@@ -796,21 +865,40 @@
                 serviceNotes: document.getElementById('serviceNotes').value
             };
 
-            if (id) {
-                const index = maintenances.findIndex(m => m.id === id);
-                if (index !== -1) {
-                    maintenances[index] = { id, ...newEvData };
-                }
-                showToast('Agendamento atualizado com sucesso!');
-            } else {
-                const newId = Date.now().toString();
-                maintenances.push({ id: newId, ...newEvData });
-                showToast('Novo agendamento criado com sucesso!');
-            }
+            const botao = document.getElementById('btnSaveEvent');
+            if (botao) botao.disabled = true;
+            sincronizando('Salvando...');
 
-            saveToLocalStorage();
-            closeModal();
-            renderApp();
+            try {
+                if (id) {
+                    const atualizado = await requisicao(API + '/' + id, {
+                        method: 'PUT',
+                        body: JSON.stringify(newEvData)
+                    });
+                    const index = maintenances.findIndex(m => m.id === id);
+                    if (index !== -1) maintenances[index] = atualizado;
+                    else maintenances.push(atualizado);
+                    showToast('Agendamento atualizado com sucesso!');
+                } else {
+                    const criado = await requisicao(API, {
+                        method: 'POST',
+                        body: JSON.stringify(newEvData)
+                    });
+                    maintenances.push(criado);
+                    showToast('Novo agendamento criado com sucesso!');
+                }
+
+                mostrarErro(null);
+                sincronizado();
+                closeModal();
+                renderApp();
+            } catch (erro) {
+                sincronizado();
+                mostrarErro('Não foi possível salvar: ' + erro.message);
+                showToast('Erro ao salvar. O agendamento não foi gravado no banco.');
+            } finally {
+                if (botao) botao.disabled = false;
+            }
         };
 
         window.editMaintenance = function(id) {
@@ -836,12 +924,20 @@
             document.getElementById('eventModal').classList.remove('hidden');
         };
 
-        window.deleteMaintenance = function(id) {
-            if (window.confirm('Tem certeza que deseja excluir este agendamento?')) {
+        window.deleteMaintenance = async function(id) {
+            if (!window.confirm('Tem certeza que deseja excluir este agendamento?')) return;
+
+            sincronizando('Excluindo...');
+            try {
+                await requisicao(API + '/' + id, { method: 'DELETE' });
                 maintenances = maintenances.filter(m => m.id !== id);
-                saveToLocalStorage();
+                mostrarErro(null);
+                sincronizado();
                 renderApp();
                 showToast('Agendamento excluído com sucesso!');
+            } catch (erro) {
+                sincronizado();
+                mostrarErro('Não foi possível excluir: ' + erro.message);
             }
         };
 
