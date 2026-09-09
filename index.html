@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda de Manutenções | D.LANGE Imóveis</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .transition-all { transition: all 0.2s ease-in-out; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0 shadow-sm">
+        <div class="flex items-center space-x-4">
+            <div class="bg-indigo-600 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
+                <i class="fa-solid fa-calendar-days text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Agenda de Manutenções</h1>
+                <p class="text-xs text-slate-500">Controle de Ordens de Serviço e Prestadores (D.LANGE Imóveis)</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <div class="relative hidden sm:block">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+                <input type="text" id="searchInput" oninput="renderApp()" placeholder="Pesquisar contrato, prestador..." class="pl-9 pr-4 py-2 bg-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 border border-transparent focus:bg-white transition-all">
+            </div>
+            
+            <button onclick="changeView('calendar')" id="btnViewCalendar" class="px-3.5 py-2 text-sm font-medium rounded-lg bg-indigo-50 text-indigo-700 transition-all flex items-center space-x-2">
+                <i class="fa-solid fa-calendar-week"></i>
+                <span>Agenda</span>
+            </button>
+            <button onclick="changeView('table')" id="btnViewTable" class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100 transition-all flex items-center space-x-2">
+                <i class="fa-solid fa-table-list"></i>
+                <span>Tabela</span>
+            </button>
+
+            <button onclick="openModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm hover:shadow transition-all flex items-center space-x-2">
+                <i class="fa-solid fa-plus"></i>
+                <span>Novo Agendamento</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Sidebar Filters & Mini Calendar -->
+        <aside class="w-72 bg-white border-r border-slate-200 p-5 flex flex-col shrink-0 overflow-y-auto hidden md:flex">
+            <!-- Navigation date controls -->
+            <div class="flex items-center justify-between mb-6">
+                <h2 id="currentMonthYearLabel" class="font-bold text-slate-800 text-base">Carregando...</h2>
+                <div class="flex items-center space-x-1">
+                    <button onclick="navigateDate(-1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all">
+                        <i class="fa-solid fa-chevron-left text-sm"></i>
+                    </button>
+                    <button onclick="goToday()" class="px-2 py-1 text-xs font-semibold hover:bg-slate-100 rounded-lg text-slate-600 border border-slate-200 transition-all">Hoje</button>
+                    <button onclick="navigateDate(1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all">
+                        <i class="fa-solid fa-chevron-right text-sm"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mini Calendar View -->
+            <div class="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div class="grid grid-cols-7 text-center text-[10px] font-bold text-slate-400 mb-2">
+                    <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
+                </div>
+                <div id="miniCalendarDays" class="grid grid-cols-7 gap-1 text-center text-xs">
+                    <!-- Dynamic mini calendar days -->
+                </div>
+            </div>
+
+            <!-- Filters by Status -->
+            <div class="space-y-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Filtrar por Status</h3>
+                <div class="space-y-2 text-sm">
+                    <label class="flex items-center space-x-3 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50">
+                        <input type="checkbox" checked onchange="filterStatusChange()" value="Pendente" class="status-filter rounded text-amber-600 focus:ring-amber-500 h-4 w-4">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                        <span class="text-slate-700 font-medium">Pendente</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50">
+                        <input type="checkbox" checked onchange="filterStatusChange()" value="Em Andamento" class="status-filter rounded text-blue-600 focus:ring-blue-500 h-4 w-4">
+                        <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                        <span class="text-slate-700 font-medium">Em Andamento</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50">
+                        <input type="checkbox" checked onchange="filterStatusChange()" value="Realizado" class="status-filter rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-700 font-medium">Realizado</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50">
+                        <input type="checkbox" checked onchange="filterStatusChange()" value="Cancelado" class="status-filter rounded text-rose-600 focus:ring-rose-500 h-4 w-4">
+                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                        <span class="text-slate-700 font-medium">Cancelado</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Filter by Criticality (D.LANGE standard) -->
+            <div class="mt-4 pt-4 border-t border-slate-100">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Filtrar por Criticidade</h3>
+                <div class="space-y-2 text-sm">
+                    <label class="flex items-center space-x-3 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50">
+                        <input type="checkbox" checked onchange="filterStatusChange()" value="Emergencial" class="criticality-filter rounded text-rose-600 focus:ring-rose-500 h-4 w-4">
+                        <span class="w-2.5 h-2.5 rounded-full bg-rose-600 animate-pulse"></span>
+                        <span class="text-slate-700 text-xs font-medium">1. Emergencial (Alto Risco)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50">
+                        <input type="checkbox" checked onchange="filterStatusChange()" value="Urgente" class="criticality-filter rounded text-orange-600 focus:ring-orange-500 h-4 w-4">
+                        <span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                        <span class="text-slate-700 text-xs font-medium">2. Urgente</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50">
+                        <input type="checkbox" checked onchange="filterStatusChange()" value="Necessário" class="criticality-filter rounded text-amber-600 focus:ring-amber-500 h-4 w-4">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                        <span class="text-slate-700 text-xs font-medium">3. Necessário / Corretivo</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50">
+                        <input type="checkbox" checked onchange="filterStatusChange()" value="Preventivo" class="criticality-filter rounded text-blue-600 focus:ring-blue-500 h-4 w-4">
+                        <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                        <span class="text-slate-700 text-xs font-medium">4. Preventivo / Melhoria</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Gestora & Professional Quick filters -->
+            <div class="mt-6 pt-6 border-t border-slate-100 space-y-4">
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Gestora Responsável</h3>
+                    <select id="filterGestora" onchange="renderApp()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Todas as Gestoras</option>
+                        <option value="Gestora Contratos 1">Gestora Contratos 1</option>
+                        <option value="Gestora Contratos 2">Gestora Contratos 2</option>
+                        <option value="Gestora Contratos 3">Gestora Contratos 3</option>
+                        <option value="Gestora Contratos 4">Gestora Contratos 4</option>
+                    </select>
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Prestador / Profissional</h3>
+                    <select id="filterProvider" onchange="renderApp()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Todos os Prestadores</option>
+                    </select>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col bg-white overflow-hidden relative">
+            
+            <!-- Calendar View Container -->
+            <div id="calendarView" class="flex-1 flex flex-col h-full overflow-hidden">
+                <div class="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center py-2.5 text-xs font-bold text-slate-500 shrink-0">
+                    <div>Domingo</div>
+                    <div>Segunda</div>
+                    <div>Terça</div>
+                    <div>Quarta</div>
+                    <div>Quinta</div>
+                    <div>Sexta</div>
+                    <div>Sábado</div>
+                </div>
+                <div id="calendarGrid" class="flex-1 grid grid-cols-7 grid-rows-5 bg-slate-200 gap-px overflow-y-auto">
+                    <!-- Rendered dynamically -->
+                </div>
+            </div>
+
+            <!-- Table View Container -->
+            <div id="tableView" class="flex-1 flex flex-col h-full overflow-hidden hidden bg-white">
+                <div class="overflow-x-auto flex-1">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                <th class="p-4">Data / Hora</th>
+                                <th class="p-4">Contrato & Imóvel</th>
+                                <th class="p-4">Inquilino / Contato</th>
+                                <th class="p-4">Prestador</th>
+                                <th class="p-4">Serviço</th>
+                                <th class="p-4">Gestora</th>
+                                <th class="p-4">Status</th>
+                                <th class="p-4 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-100 text-sm">
+                            <!-- Rendered dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="eventModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden transform transition-all">
+            <div class="bg-indigo-600 px-6 py-4 flex items-center justify-between text-white">
+                <h3 id="modalTitle" class="font-bold text-lg flex items-center space-x-2">
+                    <i class="fa-solid fa-screwdriver-wrench"></i>
+                    <span>Novo Agendamento de Manutenção</span>
+                </h3>
+                <button onclick="closeModal()" class="text-indigo-200 hover:text-white transition-all text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="maintenanceForm" onsubmit="saveMaintenance(event)" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                <input type="hidden" id="eventId">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Código do Contrato *</label>
+                        <input type="text" id="contractCode" required placeholder="Ex: CTR-9842" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Endereço do Imóvel *</label>
+                        <input type="text" id="propertyAddress" required placeholder="Ex: Rua das Flores, 123" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nome do Inquilino *</label>
+                        <input type="text" id="tenantName" required placeholder="Nome completo" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contato do Inquilino *</label>
+                        <input type="text" id="tenantContact" required placeholder="(11) 98765-4321" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Prestador / Empresa *</label>
+                        <input type="text" id="providerName" required placeholder="Ex: Hidráulica Silva" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contato do Prestador *</label>
+                        <input type="text" id="providerContact" required placeholder="(11) 91234-5678" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Data Agendada *</label>
+                        <input type="date" id="scheduleDate" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Horário *</label>
+                        <input type="time" id="scheduleTime" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Status *</label>
+                        <select id="scheduleStatus" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="Pendente">Pendente</option>
+                            <option value="Em Andamento">Em Andamento</option>
+                            <option value="Realizado">Realizado</option>
+                            <option value="Cancelado">Cancelado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Gestora Responsável *</label>
+                        <select id="managerName" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="Gestora Contratos 1">Gestora Contratos 1</option>
+                            <option value="Gestora Contratos 2">Gestora Contratos 2</option>
+                            <option value="Gestora Contratos 3">Gestora Contratos 3</option>
+                            <option value="Gestora Contratos 4">Gestora Contratos 4</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Criticidade *</label>
+                        <select id="criticality" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="Emergencial">1. Emergencial (Alto Risco)</option>
+                            <option value="Urgente">2. Urgente (Médio Risco)</option>
+                            <option value="Necessário">3. Necessário / Corretivo</option>
+                            <option value="Preventivo">4. Preventivo / Melhoria</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tipo de Serviço *</label>
+                        <input type="text" id="serviceType" required placeholder="Ex: Vazamento no Banheiro" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações</label>
+                    <textarea id="serviceNotes" rows="3" placeholder="Instruções de acesso..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+
+                <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-all">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow transition-all">Salvar Agendamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div id="detailsModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden transform transition-all">
+            <div class="bg-slate-900 px-6 py-4 flex items-center justify-between text-white">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                    <span>Detalhes da Manutenção</span>
+                </h3>
+                <button onclick="closeDetailsModal()" class="text-slate-400 hover:text-white transition-all text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="detailsContent" class="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+                <!-- Rendered dynamically -->
+            </div>
+            <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 flex items-center justify-between">
+                <button id="btnDeleteEvent" onclick="" class="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-all flex items-center space-x-1">
+                    <i class="fa-solid fa-trash"></i>
+                    <span>Excluir</span>
+                </button>
+                <div class="flex space-x-2">
+                    <button onclick="closeDetailsModal()" class="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition-all">Fechar</button>
+                    <button id="btnEditEvent" onclick="" class="px-4 py-1.5 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg transition-all">Editar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-3 transform translate-y-20 opacity-0 transition-all duration-300 z-50 text-sm">
+        <i id="toastIcon" class="fa-solid fa-check text-emerald-400"></i>
+        <span id="toastMessage">Operação realizada com sucesso!</span>
+    </div>
+
+    <script>
+        let currentDate = new Date();
+        let currentView = 'calendar';
+        let maintenances = [];
+        const STORAGE_KEY = 'dlange_maintenances_data_v3';
+
+        window.onload = function() {
+            loadInitialData();
+            renderApp();
+        };
+
+        function loadInitialData() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    maintenances = JSON.parse(saved);
+                } catch(e) {
+                    maintenances = getDefaultData();
+                }
+            } else {
+                maintenances = getDefaultData();
+                saveToLocalStorage();
+            }
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(maintenances));
+        }
+
+        function getDefaultData() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+            return [
+                {
+                    id: '1',
+                    contractCode: 'CTR-2041',
+                    propertyAddress: 'Av. Paulista, 1000 - Apto 12B',
+                    tenantName: 'Lucas Silveira',
+                    tenantContact: '(11) 97788-1122',
+                    providerName: 'Electro Service Ltda',
+                    providerContact: '(11) 94433-2211',
+                    scheduleDate: todayStr,
+                    scheduleTime: '14:30',
+                    status: 'Pendente',
+                    managerName: 'Gestora Contratos 1',
+                    criticality: 'Emergencial',
+                    serviceType: 'Reparo no Quadro Elétrico',
+                    serviceNotes: 'Disjuntor desarmando com faíscas.'
+                },
+                {
+                    id: '2',
+                    contractCode: 'CTR-1852',
+                    propertyAddress: 'Rua Augusta, 550 - Sala 31',
+                    tenantName: 'Mariana Costa',
+                    tenantContact: '(11) 99887-6655',
+                    providerName: 'HidroClean Caça Vazamentos',
+                    providerContact: '(11) 95544-3322',
+                    scheduleDate: tomorrowStr,
+                    scheduleTime: '10:00',
+                    status: 'Realizado',
+                    managerName: 'Gestora Contratos 2',
+                    criticality: 'Urgente',
+                    serviceType: 'Infiltração no Banheiro',
+                    serviceNotes: 'Serviço concluído e testado.'
+                }
+            ];
+        }
+
+        window.renderApp = function() {
+            renderHeaderDate();
+            renderMiniCalendar();
+            populateProviderFilter();
+            if (currentView === 'calendar') {
+                renderCalendarGrid();
+            } else {
+                renderTable();
+            }
+        };
+
+        window.changeView = function(view) {
+            currentView = view;
+            const btnCal = document.getElementById('btnViewCalendar');
+            const btnTab = document.getElementById('btnViewTable');
+            const calView = document.getElementById('calendarView');
+            const tabView = document.getElementById('tableView');
+
+            if (view === 'calendar') {
+                btnCal.className = "px-3.5 py-2 text-sm font-medium rounded-lg bg-indigo-50 text-indigo-700 transition-all flex items-center space-x-2";
+                btnTab.className = "px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100 transition-all flex items-center space-x-2";
+                calView.classList.remove('hidden');
+                tabView.classList.add('hidden');
+                renderCalendarGrid();
+            } else {
+                btnTab.className = "px-3.5 py-2 text-sm font-medium rounded-lg bg-indigo-50 text-indigo-700 transition-all flex items-center space-x-2";
+                btnCal.className = "px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100 transition-all flex items-center space-x-2";
+                tabView.classList.remove('hidden');
+                calView.classList.add('hidden');
+                renderTable();
+            }
+        };
+
+        window.navigateDate = function(direction) {
+            currentDate.setMonth(currentDate.getMonth() + direction);
+            renderApp();
+        };
+
+        window.goToday = function() {
+            currentDate = new Date();
+            renderApp();
+        };
+
+        function renderHeaderDate() {
+            const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            const label = `${months[currentDate.getMonth()]} de ${currentDate.getFullYear()}`;
+            document.getElementById('currentMonthYearLabel').innerText = label;
+        }
+
+        function renderMiniCalendar() {
+            const miniGrid = document.getElementById('miniCalendarDays');
+            miniGrid.innerHTML = '';
+
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            for (let i = 0; i < firstDayIndex; i++) {
+                const span = document.createElement('span');
+                miniGrid.appendChild(span);
+            }
+
+            for (let day = 1; day <= totalDays; day++) {
+                const dayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const span = document.createElement('span');
+                span.className = "h-6 w-6 mx-auto flex items-center justify-center rounded-full text-xs cursor-pointer hover:bg-indigo-100 transition-all";
+                
+                if (dayStr === todayStr) {
+                    span.classList.add('bg-indigo-600', 'text-white', 'font-bold');
+                } else {
+                    span.classList.add('text-slate-700');
+                }
+
+                const hasEvent = maintenances.some(m => m.scheduleDate === dayStr);
+                if (hasEvent && dayStr !== todayStr) {
+                    span.classList.add('border', 'border-indigo-400', 'font-bold', 'text-indigo-600');
+                }
+
+                span.innerText = day;
+                span.onclick = () => {
+                    currentDate = new Date(year, month, day);
+                    renderApp();
+                };
+                miniGrid.appendChild(span);
+            }
+        }
+
+        function populateProviderFilter() {
+            const select = document.getElementById('filterProvider');
+            const currentVal = select.value;
+            const providers = [...new Set(maintenances.map(m => m.providerName))];
+            
+            select.innerHTML = '<option value="">Todos os Prestadores</option>';
+            providers.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.innerText = p;
+                if (p === currentVal) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderCalendarGrid() {
+            const grid = document.getElementById('calendarGrid');
+            grid.innerHTML = '';
+
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            const searchVal = (document.getElementById('searchInput').value || '').toLowerCase();
+            const selectedGestora = document.getElementById('filterGestora').value;
+            const selectedProvider = document.getElementById('filterProvider').value;
+            const statusFilters = Array.from(document.querySelectorAll('.status-filter:checked')).map(cb => cb.value);
+            const criticalityFilters = Array.from(document.querySelectorAll('.criticality-filter:checked')).map(cb => cb.value);
+
+            for (let i = 0; i < firstDayIndex; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = "bg-slate-100/50 p-2 min-h-[110px] opacity-40";
+                grid.appendChild(emptyCell);
+            }
+
+            for (let day = 1; day <= totalDays; day++) {
+                const dayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const cell = document.createElement('div');
+                cell.className = "bg-white p-2 min-h-[110px] flex flex-col transition-all hover:bg-slate-50/60";
+
+                const isToday = dayStr === todayStr;
+
+                const dayHeader = document.createElement('div');
+                dayHeader.className = "flex items-center justify-between mb-1.5";
+                dayHeader.innerHTML = `
+                    <span class="text-xs font-bold ${isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-sm' : 'text-slate-700'}">${day}</span>
+                    <button onclick="openModalForDate('${dayStr}')" class="text-slate-300 hover:text-indigo-600 text-xs transition-all" title="Adicionar neste dia"><i class="fa-solid fa-plus-circle"></i></button>
+                `;
+                cell.appendChild(dayHeader);
+
+                const eventsContainer = document.createElement('div');
+                eventsContainer.className = "flex-1 flex flex-col gap-1 overflow-y-auto max-h-[100px]";
+
+                const dayEvents = maintenances.filter(m => {
+                    if (m.scheduleDate !== dayStr) return false;
+                    if (!statusFilters.includes(m.status)) return false;
+                    if (!criticalityFilters.includes(m.criticality)) return false;
+                    if (selectedGestora && m.managerName !== selectedGestora) return false;
+                    if (selectedProvider && m.providerName !== selectedProvider) return false;
+                    if (searchVal) {
+                        const matchText = `${m.contractCode} ${m.providerName} ${m.tenantName} ${m.serviceType} ${m.propertyAddress}`.toLowerCase();
+                        if (!matchText.includes(searchVal)) return false;
+                    }
+                    return true;
+                });
+
+                dayEvents.forEach(ev => {
+                    const eventCard = document.createElement('div');
+                    
+                    let critColor = 'bg-amber-100 text-amber-900 border-amber-300';
+                    if (ev.criticality === 'Emergencial') critColor = 'bg-rose-100 text-rose-900 border-rose-300 font-semibold';
+                    else if (ev.criticality === 'Urgente') critColor = 'bg-orange-100 text-orange-900 border-orange-300';
+                    else if (ev.criticality === 'Preventivo') critColor = 'bg-blue-100 text-blue-900 border-blue-300';
+
+                    eventCard.className = `p-1.5 rounded-lg border text-xs cursor-pointer shadow-sm hover:shadow transition-all ${critColor}`;
+                    
+                    let critShort = 'Emerg.';
+                    if (ev.criticality === 'Urgente') critShort = 'Urg.';
+                    if (ev.criticality === 'Necessário') critShort = 'Necess.';
+                    if (ev.criticality === 'Preventivo') critShort = 'Prev.';
+
+                    eventCard.innerHTML = `
+                        <div class="font-bold flex items-center justify-between">
+                            <span class="truncate">${ev.scheduleTime} - ${ev.contractCode}</span>
+                            <span class="text-[9px] px-1 bg-white/70 rounded font-bold">${critShort}</span>
+                        </div>
+                        <div class="truncate text-[11px] opacity-90">${ev.serviceType}</div>
+                        <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-black/5 opacity-80">
+                            <span class="truncate"><i class="fa-solid fa-user-tie mr-0.5"></i>${(ev.managerName || '').replace('Gestora Contratos ', 'G.')}</span>
+                            <span class="truncate"><i class="fa-solid fa-wrench mr-0.5"></i>${ev.providerName}</span>
+                        </div>
+                    `;
+                    eventCard.onclick = (e) => {
+                        e.stopPropagation();
+                        showDetails(ev.id);
+                    };
+                    eventsContainer.appendChild(eventCard);
+                });
+
+                cell.appendChild(eventsContainer);
+                grid.appendChild(cell);
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            const searchVal = (document.getElementById('searchInput').value || '').toLowerCase();
+            const selectedGestora = document.getElementById('filterGestora').value;
+            const selectedProvider = document.getElementById('filterProvider').value;
+            const statusFilters = Array.from(document.querySelectorAll('.status-filter:checked')).map(cb => cb.value);
+            const criticalityFilters = Array.from(document.querySelectorAll('.criticality-filter:checked')).map(cb => cb.value);
+
+            const filtered = maintenances.filter(m => {
+                if (!statusFilters.includes(m.status)) return false;
+                if (!criticalityFilters.includes(m.criticality)) return false;
+                if (selectedGestora && m.managerName !== selectedGestora) return false;
+                if (selectedProvider && m.providerName !== selectedProvider) return false;
+                if (searchVal) {
+                    const matchText = `${m.contractCode} ${m.providerName} ${m.tenantName} ${m.serviceType} ${m.propertyAddress}`.toLowerCase();
+                    if (!matchText.includes(searchVal)) return false;
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400">Nenhum agendamento encontrado com os filtros atuais.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(ev => {
+                let badgeClass = 'bg-amber-100 text-amber-800';
+                if (ev.status === 'Em Andamento') badgeClass = 'bg-blue-100 text-blue-800';
+                if (ev.status === 'Realizado') badgeClass = 'bg-emerald-100 text-emerald-800 font-semibold';
+                if (ev.status === 'Cancelado') badgeClass = 'bg-rose-100 text-rose-800';
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition-all cursor-pointer';
+                tr.onclick = () => showDetails(ev.id);
+                tr.innerHTML = `
+                    <td class="p-4 whitespace-nowrap">
+                        <div class="font-semibold text-slate-900">${formatDateDisplay(ev.scheduleDate)}</div>
+                        <div class="text-xs text-slate-500"><i class="fa-regular fa-clock mr-1"></i>${ev.scheduleTime}</div>
+                    </td>
+                    <td class="p-4">
+                        <div class="font-bold text-indigo-600">${ev.contractCode}</div>
+                        <div class="text-xs text-slate-500 truncate max-w-xs">${ev.propertyAddress}</div>
+                    </td>
+                    <td class="p-4">
+                        <div class="font-medium text-slate-800">${ev.tenantName}</div>
+                        <div class="text-xs text-slate-500"><i class="fa-solid fa-phone text-[10px] mr-1"></i>${ev.tenantContact}</div>
+                    </td>
+                    <td class="p-4">
+                        <div class="font-medium text-slate-800">${ev.providerName}</div>
+                        <div class="text-xs text-slate-500"><i class="fa-solid fa-phone text-[10px] mr-1"></i>${ev.providerContact}</div>
+                    </td>
+                    <td class="p-4">
+                        <div class="font-medium text-slate-800">${ev.serviceType}</div>
+                    </td>
+                    <td class="p-4 whitespace-nowrap">
+                        <span class="text-xs font-medium bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full"><i class="fa-solid fa-user-tie mr-1 text-[10px]"></i>${ev.managerName}</span>
+                    </td>
+                    <td class="p-4 whitespace-nowrap">
+                        <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${badgeClass}">${ev.status}</span>
+                    </td>
+                    <td class="p-4 text-right whitespace-nowrap" onclick="event.stopPropagation()">
+                        <button onclick="editMaintenance('${ev.id}')" class="p-2 text-slate-400 hover:text-indigo-600 transition-all" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteMaintenance('${ev.id}')" class="p-2 text-slate-400 hover:text-rose-600 transition-all" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function formatDateDisplay(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            return dateStr;
+        }
+
+        window.openModal = function() {
+            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-screwdriver-wrench"></i><span>Novo Agendamento de Manutenção</span>';
+            document.getElementById('maintenanceForm').reset();
+            document.getElementById('eventId').value = '';
+            document.getElementById('scheduleDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('eventModal').classList.remove('hidden');
+        };
+
+        window.openModalForDate = function(dateStr) {
+            openModal();
+            document.getElementById('scheduleDate').value = dateStr;
+        };
+
+        window.closeModal = function() {
+            document.getElementById('eventModal').classList.add('hidden');
+        };
+
+        window.showDetails = function(id) {
+            const ev = maintenances.find(m => m.id === id);
+            if (!ev) return;
+
+            let badgeClass = 'bg-amber-100 text-amber-800';
+            if (ev.status === 'Em Andamento') badgeClass = 'bg-blue-100 text-blue-800';
+            if (ev.status === 'Realizado') badgeClass = 'bg-emerald-100 text-emerald-800';
+            if (ev.status === 'Cancelado') badgeClass = 'bg-rose-100 text-rose-800';
+
+            let critBadge = 'bg-amber-100 text-amber-800 border border-amber-200';
+            if (ev.criticality === 'Emergencial') critBadge = 'bg-rose-100 text-rose-800 border border-rose-200 font-bold';
+            else if (ev.criticality === 'Urgente') critBadge = 'bg-orange-100 text-orange-800 border border-orange-200';
+            else if (ev.criticality === 'Preventivo') critBadge = 'bg-blue-100 text-blue-800 border border-blue-200';
+
+            const content = document.getElementById('detailsContent');
+            content.innerHTML = `
+                <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Contrato: ${ev.contractCode}</span>
+                        <h4 class="text-base font-bold text-slate-900">${ev.serviceType}</h4>
+                    </div>
+                    <div class="flex flex-col items-end gap-1">
+                        <span class="text-xs font-semibold px-3 py-1 rounded-full ${badgeClass}">${ev.status}</span>
+                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${critBadge}">${ev.criticality}</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase">Data e Horário</span>
+                        <div class="font-semibold text-slate-800">${formatDateDisplay(ev.scheduleDate)} às ${ev.scheduleTime}</div>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase">Gestora Responsável</span>
+                        <div class="font-semibold text-slate-800"><i class="fa-solid fa-user-tie text-indigo-600 mr-1"></i>${ev.managerName}</div>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase">Endereço do Imóvel</span>
+                    <div class="text-slate-800 font-medium">${ev.propertyAddress}</div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+                        <span class="text-xs font-bold text-indigo-600 uppercase block mb-1">Inquilino</span>
+                        <div class="font-bold text-slate-800">${ev.tenantName}</div>
+                        <div class="text-xs text-slate-600 mt-1"><i class="fa-solid fa-phone mr-1"></i>${ev.tenantContact}</div>
+                    </div>
+                    <div class="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+                        <span class="text-xs font-bold text-emerald-600 uppercase block mb-1">Prestador</span>
+                        <div class="font-bold text-slate-800">${ev.providerName}</div>
+                        <div class="text-xs text-slate-600 mt-1"><i class="fa-solid fa-phone mr-1"></i>${ev.providerContact}</div>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase">Observações</span>
+                    <p class="text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 mt-1 whitespace-pre-line">${ev.serviceNotes || 'Nenhuma observação informada.'}</p>
+                </div>
+            `;
+
+            document.getElementById('btnEditEvent').onclick = () => {
+                closeDetailsModal();
+                editMaintenance(ev.id);
+            };
+            document.getElementById('btnDeleteEvent').onclick = () => {
+                closeDetailsModal();
+                deleteMaintenance(ev.id);
+            };
+            document.getElementById('detailsModal').classList.remove('hidden');
+        };
+
+        window.closeDetailsModal = function() {
+            document.getElementById('detailsModal').classList.add('hidden');
+        };
+
+        window.saveMaintenance = function(e) {
+            e.preventDefault();
+            const id = document.getElementById('eventId').value;
+            
+            const newEvData = {
+                contractCode: document.getElementById('contractCode').value,
+                propertyAddress: document.getElementById('propertyAddress').value,
+                tenantName: document.getElementById('tenantName').value,
+                tenantContact: document.getElementById('tenantContact').value,
+                providerName: document.getElementById('providerName').value,
+                providerContact: document.getElementById('providerContact').value,
+                scheduleDate: document.getElementById('scheduleDate').value,
+                scheduleTime: document.getElementById('scheduleTime').value,
+                status: document.getElementById('scheduleStatus').value,
+                managerName: document.getElementById('managerName').value,
+                criticality: document.getElementById('criticality').value,
+                serviceType: document.getElementById('serviceType').value,
+                serviceNotes: document.getElementById('serviceNotes').value
+            };
+
+            if (id) {
+                const index = maintenances.findIndex(m => m.id === id);
+                if (index !== -1) {
+                    maintenances[index] = { id, ...newEvData };
+                }
+                showToast('Agendamento atualizado com sucesso!');
+            } else {
+                const newId = Date.now().toString();
+                maintenances.push({ id: newId, ...newEvData });
+                showToast('Novo agendamento criado com sucesso!');
+            }
+
+            saveToLocalStorage();
+            closeModal();
+            renderApp();
+        };
+
+        window.editMaintenance = function(id) {
+            const ev = maintenances.find(m => m.id === id);
+            if (!ev) return;
+
+            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-pen"></i><span>Editar Agendamento de Manutenção</span>';
+            document.getElementById('eventId').value = ev.id;
+            document.getElementById('contractCode').value = ev.contractCode;
+            document.getElementById('propertyAddress').value = ev.propertyAddress;
+            document.getElementById('tenantName').value = ev.tenantName;
+            document.getElementById('tenantContact').value = ev.tenantContact;
+            document.getElementById('providerName').value = ev.providerName;
+            document.getElementById('providerContact').value = ev.providerContact;
+            document.getElementById('scheduleDate').value = ev.scheduleDate;
+            document.getElementById('scheduleTime').value = ev.scheduleTime;
+            document.getElementById('scheduleStatus').value = ev.status;
+            document.getElementById('managerName').value = ev.managerName;
+            document.getElementById('criticality').value = ev.criticality || 'Necessário';
+            document.getElementById('serviceType').value = ev.serviceType;
+            document.getElementById('serviceNotes').value = ev.serviceNotes;
+
+            document.getElementById('eventModal').classList.remove('hidden');
+        };
+
+        window.deleteMaintenance = function(id) {
+            if (window.confirm('Tem certeza que deseja excluir este agendamento?')) {
+                maintenances = maintenances.filter(m => m.id !== id);
+                saveToLocalStorage();
+                renderApp();
+                showToast('Agendamento excluído com sucesso!');
+            }
+        };
+
+        window.filterStatusChange = function() {
+            renderApp();
+        };
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
