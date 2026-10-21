@@ -9,61 +9,42 @@ Agenda de ordens de serviço (calendário + tabela) com os dados guardados em um
 index.html                     site estático (calendário, tabela, modais)
 api/manutencoes/index.js       GET (listar) e POST (criar)
 api/manutencoes/[id].js        PUT (editar) e DELETE (excluir)
-api/_supabase.js               acesso ao banco + conversão de campos
-supabase/schema.sql            criação da tabela
+api/_db.js                     acesso ao banco + conversão de campos
+db/schema.sql                  criação da tabela
 ```
 
 O navegador **nunca** fala com o banco diretamente: ele chama `/api/manutencoes`,
 que roda como função serverless na própria Vercel (incluída no plano gratuito, no
 mesmo deploy do site). A chave secreta do banco fica só na variável de ambiente do
-servidor. Você não hospeda nem servidor nem banco — o Supabase entrega o Postgres
+servidor. Você não hospeda nem servidor nem banco — o Neon entrega o Postgres
 gerenciado no plano gratuito.
 
 ---
 
-## Passo a passo (uma vez só, ~10 minutos)
+## Configuração
 
-### 1. Banco no Supabase — **já está pronto** ✅
+O banco é um Postgres **gerenciado pelo [Neon](https://neon.tech)** (plano
+gratuito, região São Paulo), compartilhado pelos sistemas da D.Lange — cada um
+com a sua tabela. A deste sistema é `public.manutencoes`, criada pelo SQL em
+[`db/schema.sql`](db/schema.sql).
 
-O projeto e a tabela já foram criados:
+No plano gratuito o Neon desliga o banco depois de alguns minutos sem uso e o
+religa sozinho na próxima consulta: a primeira requisição depois de um tempo
+parado demora um pouco mais, mas ninguém precisa reativar nada.
 
-| | |
+Na Vercel, a única variável de ambiente é:
+
+| Name | Value |
 |---|---|
-| Projeto | **agenda-imobiliaria** (`yuojxbeakhfnlvefzoro`) |
-| Região | `sa-east-1` (São Paulo) |
-| Plano | Gratuito — US$ 0/mês |
-| Tabela | `public.manutencoes`, com RLS ligado e sem policies |
-| `SUPABASE_URL` | `https://yuojxbeakhfnlvefzoro.supabase.co` |
+| `DATABASE_URL` | connection string do Neon (a com `-pooler`), em Neon → **Connect** |
 
-O SQL aplicado está em [`supabase/schema.sql`](supabase/schema.sql) (migration
-`create_manutencoes_table`), guardado caso você precise recriar o banco do zero.
+Variável nova só vale depois de um **Redeploy**. Sem ela o app abre com uma barra
+vermelha avisando que o banco não está configurado.
 
-Falta só pegar a chave secreta, que por segurança ninguém além de você consegue ler:
+> Até outubro de 2026 os dados ficavam no Supabase, que pausava o projeto depois
+> de 7 dias sem uso.
 
-1. Abra <https://supabase.com/dashboard/project/yuojxbeakhfnlvefzoro/settings/api-keys>
-2. Copie a chave **`service_role`** (clique em *Reveal*).
-3. ⚠️ Ela dá acesso total ao banco — só pode ir para as variáveis de ambiente da
-   Vercel, nunca para um arquivo `.html` nem para um commit no Git.
-
-### 2. Publicar na Vercel
-
-1. Suba o projeto para um repositório no GitHub.
-2. Em <https://vercel.com>, clique em **Add New → Project** e importe o repositório.
-   Não é preciso configurar build: o Framework Preset pode ficar em **Other**.
-3. Antes de clicar em **Deploy**, abra **Environment Variables** e adicione:
-
-   | Name | Value |
-   |---|---|
-   | `SUPABASE_URL` | `https://yuojxbeakhfnlvefzoro.supabase.co` |
-   | `SUPABASE_SERVICE_ROLE_KEY` | a chave `service_role` copiada no passo 1 |
-
-   Marque as três opções (Production, Preview, Development).
-4. **Deploy**. Ao abrir a URL gerada, a agenda já carrega e grava no Postgres.
-
-> Se você mudar as variáveis depois, é preciso fazer um novo deploy
-> (Deployments → ⋯ → Redeploy) para elas valerem.
-
-### 3. Migrar os agendamentos que estavam no navegador
+## Migrar os agendamentos que estavam no navegador
 
 Se você já usava a versão antiga nesta máquina, abra a nova URL **no mesmo
 navegador**: estando o banco vazio, a aplicação detecta os registros do
@@ -76,7 +57,7 @@ os dados passam a ser compartilhados entre todos os computadores.
 
 ```bash
 npm i -g vercel
-cp .env.example .env.local   # preencha com os valores do Supabase
+cp .env.example .env.local   # preencha a DATABASE_URL do Neon
 vercel dev
 ```
 
@@ -116,17 +97,9 @@ Corpo de `POST`/`PUT` (JSON):
 
 ---
 
-## Segurança — leia antes de divulgar o link
+## Segurança
 
-A tabela está com **RLS ligado e sem nenhuma policy**, então a API pública do
-Supabase não alcança os dados — verificado na prática contra o banco real:
-com uma linha gravada na tabela, a chave `anon` e a `publishable` retornam lista
-vazia no `SELECT`, o `INSERT` é recusado com `42501` e o `DELETE` não apaga nada.
-Só a `service_role`, que vive apenas nas variáveis de ambiente da Vercel, enxerga
-a tabela.
-
-Por outro lado, **as rotas `/api` ainda não têm login**. Quem tiver a URL do site
-consegue ver e alterar a agenda. Enquanto o link circular apenas internamente,
-tudo bem; quando quiser fechar o acesso, o caminho natural é adicionar o
-**Supabase Auth** (e-mail/senha) e validar o token do usuário no início de cada
-função `/api`.
+A `DATABASE_URL` só existe nas variáveis de ambiente da Vercel: o navegador
+nunca fala com o banco. Já as rotas `/api` ainda **não têm login** — quem tiver
+a URL do site vê e altera a agenda. Para fechar, adicione um login (por exemplo
+o Neon Auth / Better Auth) e valide a sessão no início de cada função `/api`.

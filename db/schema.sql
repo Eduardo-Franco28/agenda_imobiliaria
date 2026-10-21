@@ -1,9 +1,7 @@
 -- ============================================================
--- Agenda Imobiliária — schema do banco (Supabase / Postgres)
--- Já aplicado no projeto 'agenda-imobiliaria' (ref yuojxbeakhfnlvefzoro)
--- como a migration 'create_manutencoes_table'.
--- Mantido aqui como histórico / para recriar o banco do zero:
--- Supabase > SQL Editor > New query > Run
+-- Agenda Imobiliária — schema do banco (Postgres no Neon)
+-- Aplicado no Neon (migrado do Supabase em 2026-10-20).
+-- Para recriar o banco do zero: Neon > SQL Editor > cole este arquivo > Run
 -- ============================================================
 
 create table if not exists public.manutencoes (
@@ -46,10 +44,3 @@ create trigger manutencoes_set_updated_at
   before update on public.manutencoes
   for each row execute function public.set_updated_at();
 
--- ------------------------------------------------------------
--- Segurança: RLS ligado e SEM nenhuma policy.
--- Ninguém acessa a tabela pela API pública do Supabase (chave anon).
--- Só a service_role key — usada apenas nas funções /api da Vercel,
--- que nunca chega ao navegador — consegue ler e escrever.
--- ------------------------------------------------------------
-alter table public.manutencoes enable row level security;
